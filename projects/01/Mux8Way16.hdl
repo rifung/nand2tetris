@@ -18,5 +18,47 @@ CHIP Mux8Way16 {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+    Not(in=sel[2], out=notSel2);
+
+    Mux4Way16(a=a, b=b, c=c, d=d, sel[0..1]=sel[0..1], out=unfilteredABCDMux);
+    Mux4Way16(a=e, b=f, c=g, d=h, sel[0..1]=sel[0..1], out=unfilteredEFGHMux);
+
+    And16(a=unfilteredABCDMux,
+          b[0]=notSel2,
+          b[1]=notSel2,
+          b[2]=notSel2,
+          b[3]=notSel2,
+          b[4]=notSel2,
+          b[5]=notSel2,
+          b[6]=notSel2,
+          b[7]=notSel2,
+          b[8]=notSel2,
+          b[9]=notSel2,
+          b[10]=notSel2,
+          b[11]=notSel2,
+          b[12]=notSel2,
+          b[13]=notSel2,
+          b[14]=notSel2,
+          b[15]=notSel2,
+          out=filteredABCDMux);
+    And16(a=unfilteredEFGHMux,
+          b[0]=sel[2],
+          b[1]=sel[2],
+          b[2]=sel[2],
+          b[3]=sel[2],
+          b[4]=sel[2],
+          b[5]=sel[2],
+          b[6]=sel[2],
+          b[7]=sel[2],
+          b[8]=sel[2],
+          b[9]=sel[2],
+          b[10]=sel[2],
+          b[11]=sel[2],
+          b[12]=sel[2],
+          b[13]=sel[2],
+          b[14]=sel[2],
+          b[15]=sel[2],
+          out=filteredEFGHMux);
+
+    Or16(a=filteredABCDMux, b=filteredEFGHMux, out=out);
 }
