@@ -42,5 +42,89 @@ CHIP ALU {
         ng; // 1 if (out < 0),  0 otherwise
 
     PARTS:
-   // Put you code here:
+    // zero x
+    Mux16(a=x, b[0..15]=false, sel=zx, out=zeroedX);
+
+    // negate x
+    Not16(in=zeroedX, out=notZeroedX);
+    Mux16(a=zeroedX, b=notZeroedX, sel=nx, out=finalX);
+
+    // zero y
+    Mux16(a=y, b[0..15]=false, sel=zy, out=zeroedY);
+
+    // negate y
+    Not16(in=zeroedY, out=notZeroedY);
+    Mux16(a=zeroedY, b=notZeroedY, sel=ny, out=finalY);
+
+    // x+y
+    Add16(a=finalX, b=finalY, out=addXY);
+
+    // x & y
+    And16(a=finalX, b=finalY, out=andXY);
+
+    // out
+    Mux16(a=andXY, b=addXY, sel=f, out=fOut);
+
+    // !out
+    Not16(in=fOut, out=notOut);
+    Mux16(a=fOut, b=notOut, sel=no,
+          out[0]=finalOut0,
+          out[1]=finalOut1,
+          out[2]=finalOut2,
+          out[3]=finalOut3,
+          out[4]=finalOut4,
+          out[5]=finalOut5,
+          out[6]=finalOut6,
+          out[7]=finalOut7,
+          out[8]=finalOut8,
+          out[9]=finalOut9,
+          out[10]=finalOut10,
+          out[11]=finalOut11,
+          out[12]=finalOut12,
+          out[13]=finalOut13,
+          out[14]=finalOut14,
+          out[15]=finalOut15);
+    Or16(a[0]=finalOut0,
+         a[1]=finalOut1,
+         a[2]=finalOut2,
+         a[3]=finalOut3,
+         a[4]=finalOut4,
+         a[5]=finalOut5,
+         a[6]=finalOut6,
+         a[7]=finalOut7,
+         a[8]=finalOut8,
+         a[9]=finalOut9,
+         a[10]=finalOut10,
+         a[11]=finalOut11,
+         a[12]=finalOut12,
+         a[13]=finalOut13,
+         a[14]=finalOut14,
+         a[15]=finalOut15,
+         b[0..15]=false, out=out);
+
+    // set zr
+    Or8Way(in[0]=finalOut0,
+           in[1]=finalOut1,
+           in[2]=finalOut2,
+           in[3]=finalOut3,
+           in[4]=finalOut4,
+           in[5]=finalOut5,
+           in[6]=finalOut6,
+           in[7]=finalOut7,
+           out=fOut0);
+    Or8Way(in[0]=finalOut8,
+           in[1]=finalOut9,
+           in[2]=finalOut10,
+           in[3]=finalOut11,
+           in[4]=finalOut12,
+           in[5]=finalOut13,
+           in[6]=finalOut14,
+           in[7]=finalOut15,
+           out=fOut1);
+    Or(a=fOut0, b=fOut1, out=notZr);
+    Not(in=notZr, out=zr);
+
+    // set ng
+    // TODO: can I just set this?
+    Or(a=finalOut15, b=false, out=ng);
 }
