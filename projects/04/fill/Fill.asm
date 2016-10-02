@@ -9,3 +9,42 @@
 // program clears the screen, i.e. writes "white" in every pixel.
 
 // Put your code here.
+    @i
+    M=0
+    @color
+    M=0
+(LOOP)
+    @KBD
+    D=M
+    @BLACK
+    D;JNE
+    @color
+    M=0
+    @DRAW
+    0;JMP
+(BLACK)
+    @color
+    M=-1
+(DRAW)
+    @i
+    D=M
+    @SCREEN
+    D=D+A
+    @screen_pos
+    M=D
+    @color
+    D=M
+    @screen_pos
+    A=M
+    M=D
+    @i
+    M=M+1
+    D=M
+    @8192
+    D=D-A
+    @LOOP
+    D;JLT
+    @i
+    M=0
+    @LOOP
+    0;JMP
