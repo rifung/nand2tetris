@@ -39,5 +39,91 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    Not16(in=instruction,
+          out[0]=notInstruction0,
+          out[1]=notInstruction1,
+          out[2]=notInstruction2,
+          out[3]=notInstruction3,
+          out[4]=notInstruction4,
+          out[5]=notInstruction5,
+          out[6]=notInstruction6,
+          out[7]=notInstruction7,
+          out[8]=notInstruction8,
+          out[9]=notInstruction9,
+          out[10]=notInstruction10,
+          out[11]=notInstruction11,
+          out[12]=notInstruction12,
+          out[13]=notInstruction13,
+          out[14]=notInstruction14,
+          out[15]=notInstruction15);
+
+    // writeM
+    And(a=instruction[15], b=instruction[3], out=writeM);
+
+    // setA
+    Or(a=notInstruction15, b=instruction[5], out=setA);
+
+    // setD
+    And(a=instruction[15], b=instruction[4], out=setD);
+
+    // registers A and D
+    ARegister(in=result, load=setA, out=registerA, out[0..14]=addressM);
+    DRegister(in=result, load=setD, out=registerD);
+
+    // ALU
+    Mux16(a=registerA, b=inM, sel=instruction[12], out=aluY);
+
+    // D = !D?
+    And(a=notInstruction11, b=notInstruction10, out=andNotI11NotI10);
+    And(a=andNotI11NotI10, b=instruction[6], out=notD0);
+    And(a=instruction[10], b=instruction[7], out=andI10I7);
+    And(a=andI10I7, b=notInstruction6, out=notD1);
+    Or(a=notD0, b=notD1, out=nX);
+
+    // A=!A?
+    And(a=notInstruction9, b=notInstruction8, out=andNotI9NotI8);
+    And(a=andNotI9NotI8, b=instruction[6], out=notA0);
+    And(a=instruction[8], b=instruction[7], out=andI8I7);
+    And(a=andI8I7, b=notInstruction6, out=notA1);
+    Or(a=notA0, b=notA1, out=nY);
+
+    // +?
+    Or(a=instruction[11], b=instruction[9], out=orI11I9);
+    Or(a=orI11I9, b=instruction[7], out=f);
+
+    ALU(x=registerD, y=aluY, zx=instruction[11], nx=nX, zy=instruction[9],
+        ny=nY, f=f, no=false, out=aluResult, zr=aluZr, ng=aluNg);
+
+    // Increment?
+    Inc16(in=aluResult, out=incResult);
+    And(a=instruction[7], b=instruction[6], out=shouldIncrement);
+
+    Mux16(a=aluResult, b=incResult, sel=shouldIncrement, out=aluIncResult);
+    
+    // A or C instruction?
+    Mux16(a=instruction, b=aluIncResult, sel=instruction[15], out=result,
+          out=outM, out[0..7]=result0, out[8..15]=result1, out[15]=result15);
+
+    // PC
+    // zero?
+    Or8Way(in=result0, out=zero0);
+    Or8Way(in=result1, out=zero1);
+    Or(a=zero0, b=zero1, out=notIsZero);
+    Not(in=notIsZero, out=isZero);
+    And(a=isZero, b=instruction[1], out=shouldJump0);
+
+    // > 0?
+    Not(in=result15, out=isNotNegative);
+    And(a=isNotNegative, b=notIsZero, out=isPositive);
+    And(a=isPositive, b=instruction[0], out=shouldJump1);
+
+    // < 0?
+    And(a=result15, b=instruction[2], out=shouldJump2);
+
+    // jump?
+    Or(a=shouldJump0, b=shouldJump1, out=shouldJump01);
+    Or(a=shouldJump01, b=shouldJump2, out=shouldJump012);
+    And(a=shouldJump012, b=instruction[15], out=shouldJump);
+
+    PC(in=registerA, load=shouldJump, inc=true, reset=reset, out[0..14]=pc);
 }

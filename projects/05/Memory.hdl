@@ -27,5 +27,31 @@ CHIP Memory {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+    // find whether we want ram, screen, or keyboard
+    DMux8Way(in=true, sel=address[12..14],
+             a=ram0, b=ram1, c=ram2, d=ram3, e=screen0, f=screen1, g=isKeyboard);
+    
+    Or(a=ram0, b=ram1, out=ram4);
+    Or(a=ram2, b=ram3, out=ram5);
+    Or(a=ram4, b=ram5, out=isRam);
+
+    Or(a=screen0, b=screen1, out=isScreen);
+
+    // get load vars
+    And(a=isRam, b=load, out=loadRam);
+    And(a=isScreen, b=load, out=loadScreen);
+
+    RAM16K(in=in, load=loadRam, address=address[0..13], out=ramOut);
+    Screen(in=in, load=loadScreen, address=address[0..12], out=screenOut);
+    Keyboard(out=keyboardOut);
+
+    Mux8Way16(sel[0]=isRam, sel[1]=isScreen, sel[2]=isKeyboard,
+              a=false,
+              b=ramOut,
+              c=screenOut,
+              d=false,
+              e=keyboardOut,
+              f=false,
+              g=false,
+              h=false, out=out);
 }
