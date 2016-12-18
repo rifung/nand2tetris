@@ -1,11 +1,11 @@
 module Main where
 
-import Assembler
-import Instruction
-import Parser
+import Assembler.Assembler
+import Assembler.Instruction
+import Assembler.Parser
+import Assembler.SymbolTable
 import System.Environment
 import System.IO
-import SymbolTable
 
 main = do
     [inPath, outPath] <- getArgs

@@ -1,17 +1,17 @@
-module Assembler
+module Assembler.Assembler
 ( assemble
 , assembleLine
 , assembleLines
 , assembleProgram
 ) where
 
+import Assembler.Instruction
+import Assembler.Parser
+import Assembler.SymbolTable
 import Data.Char (intToDigit)
 import Data.Either
 import Data.List as List
-import Instruction
 import Numeric (showIntAtBase)
-import SymbolTable
-import Parser
 import Debug.Trace
 
 assemble :: String -> Either String String

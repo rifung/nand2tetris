@@ -1,4 +1,4 @@
-module Instruction
+module Assembler.Instruction
 ( Instruction(..)
 , Symbol(getSymbol)
 , Value(getValue)

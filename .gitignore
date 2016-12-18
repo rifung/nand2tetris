@@ -1,1 +1,4 @@
 *.out
+*.o
+*.hi
+.stack-work/

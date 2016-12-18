@@ -1,15 +1,15 @@
-module Parser
+module Assembler.Parser
 ( parseLine
 , parseLines
 , parseString
 ) where
 
+import Assembler.Instruction
 import Data.Char (intToDigit, isDigit, isSpace)
 import Data.Either
 import Data.List as List
 import Data.Maybe
 import Data.Set as Set
-import Instruction
 import Numeric (showIntAtBase)
 
 allowedCommands = Set.fromList $ [ "0", "1", "-1", "D", "A", "M", "!D", "!A"

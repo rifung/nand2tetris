@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -XBangPatterns #-}
-module SymbolTable
+module Assembler.SymbolTable
 ( generateSymbolTable
 , generateSymbolTableIns
 , initialTable
@@ -7,10 +7,10 @@ module SymbolTable
 , replaceSymbols
 ) where
 
+import Assembler.Instruction
 import Data.Either
 import Data.List as List
 import Data.Map as Map
-import Instruction
 import Debug.Trace
 
 type SymbolTable = Map.Map Symbol Value
