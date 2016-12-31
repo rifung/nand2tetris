@@ -1,8 +1,11 @@
 module Translator.Translator
-( translate
+( addHeader
+, translate
 , translateFile
+, translateFiles
 , translateLine
 , translateLines
+, translateProgram
 ) where
 
 import Data.List (intersperse)
@@ -21,6 +24,15 @@ segMap = M.fromList [ (Argument, "ARG")
                     , (Temp, "5")]
 
 segValues = [Pointer, Temp]
+
+-- Note that this assumes we can use any labelCount for translateLine
+header :: String
+header = let (syscall, _, _) = translateLine "" (Call "Sys.init" 0) 0 ""
+             setSp = [ "@256" -- SP = 256
+                     , "D=A"
+                     , "@SP"
+                     , "M=D"]
+         in concat $ intersperse "\n" $ setSp ++ syscall
 
 pop :: Char -> [String]
 pop c = [ "@SP" -- decrement stack pointer
@@ -41,10 +53,15 @@ pushD = [ "@SP" -- set next element to D
         , "@SP" -- increment stack pointer
         , "M=M+1"]
 
+addHeader :: String -> String
+addHeader s = header ++ "\n" ++ s
+
 translate :: String -> String -> Either String String
 translate fileName s =
-    parseString s >>=
-        (\cs -> pure $ concat $ intersperse "\n" $ translateLines fileName cs)
+    let translateString :: [Command] -> Either String String
+        translateString cs = pure $ concat $ intersperse "\n"
+                           $ translateLines fileName cs
+    in parseString s >>= translateString
 
 translateFile :: FilePath -> IO (Either String String)
 translateFile path =
@@ -52,10 +69,23 @@ translateFile path =
         contents <- hGetContents h
         return $! translate (takeFileName path) contents
 
-translateLine :: String -> Command -> Int -> ([String], Int)
-translateLine fileName c labelCount = case c of
-    Add -> (twoOps ["D=D+A"], labelCount)
-    Sub -> (twoOps ["D=A-D"], labelCount)
+translateFiles :: [FilePath] -> IO (Either String String)
+translateFiles [] = return (Right "")
+translateFiles (path:rest) = do
+    f0 <- translateFile path
+    -- probably not the best way to do this..
+    case f0 of
+        Left e -> return f0
+        Right s -> do next <- translateFiles rest
+                      case next of Left e -> return next
+                                   Right r -> return $ (s ++) <$> ('\n':)
+                                          <$> next
+
+translateLine :: String -> Command -> Int -> String
+             -> ([String], Int, String)
+translateLine fileName c labelCount function = case c of
+    Add -> (twoOps ["D=D+A"], labelCount, function)
+    Sub -> (twoOps ["D=A-D"], labelCount, function)
     Neg -> oneOp ["D=!D", "D=D+1"]
     Eq -> let doneLabel = "__EQ_" ++ (show labelCount) ++ "__"
           in (twoOps [ "D=D-A"
@@ -63,7 +93,7 @@ translateLine fileName c labelCount = case c of
                      , "D;JEQ"
                      , "D=1"
                      , makeLabel doneLabel
-                     , "D=D-1" ], labelCount+1)
+                     , "D=D-1" ], labelCount+1, function)
     Gt -> let doneLabel = "__GT_DONE_" ++ (show labelCount) ++ "__"
               gtLabel = "__GT_TRUE_" ++ (show labelCount) ++ "__"
           in (twoOps [ "D=A-D"
@@ -75,7 +105,7 @@ translateLine fileName c labelCount = case c of
                      , makeLabel gtLabel
                      , "D=0"
                      , makeLabel doneLabel
-                     , "D=D-1"], labelCount+1)
+                     , "D=D-1"], labelCount+1, function)
     Lt -> let doneLabel = "__LT_DONE_" ++ (show labelCount) ++ "__"
               ltLabel = "__LT_TRUE_" ++ (show labelCount) ++ "__"
           in (twoOps [ "D=A-D"
@@ -87,9 +117,9 @@ translateLine fileName c labelCount = case c of
                      , makeLabel ltLabel
                      , "D=0"
                      , makeLabel doneLabel
-                     , "D=D-1"], labelCount+1)
-    And -> (twoOps ["D=D&A"], labelCount)
-    Or -> (twoOps ["D=D|A"], labelCount)
+                     , "D=D-1"], labelCount+1, function)
+    And -> (twoOps ["D=D&A"], labelCount, function)
+    Or -> (twoOps ["D=D|A"], labelCount, function)
     Not -> oneOp ["D=!D"]
     Push seg ind -> (
         (case seg of
@@ -100,7 +130,7 @@ translateLine fileName c labelCount = case c of
                     then setDByValue
                     else setDByPointer
                 in f $ segMap ! seg
-        ) ++ pushD, labelCount)
+        ) ++ pushD, labelCount, function)
         where setDByPointer :: String -> [String]
               setDByPointer s = [ '@':(show ind)
                                 , "D=A"
@@ -123,7 +153,7 @@ translateLine fileName c labelCount = case c of
                     then popSegByValue
                     else popSegByPointer
                 in f $ segMap ! seg
-        ), labelCount)
+        ), labelCount, function)
         where popSegByPointer :: String -> [String]
               popSegByPointer s = [ '@':(show ind) -- increment s pointer by ind
                                   , "D=A"
@@ -140,16 +170,91 @@ translateLine fileName c labelCount = case c of
               popSegByValue :: String -> [String]
               popSegByValue n = popToD ++ [ '@':(show $ (read n :: Int) + ind)
                                           , "M=D"]
+    Label l -> ([makeLabel $ namespaceLabel l], labelCount, function)
+    Goto l -> (['@':(namespaceLabel l), "0;JMP"], labelCount, function)
+    IfGoto l -> ( popToD ++ ['@':(namespaceLabel l), "D;JNE"]
+                , labelCount
+                , function)
+    Function f i -> ( [ makeLabel f, "D=0"] ++ (concat $ replicate i pushD)
+                    , labelCount
+                    , f)
+    Call f i -> let retLabel = "__RET_" ++ (show labelCount) ++ "__"
+                    pushMemLabel l = ['@':l, "D=M"] ++ pushD
+                in ( ['@':retLabel, "D=A"]
+                  ++ pushD
+                  ++ (pushMemLabel "LCL")
+                  ++ (pushMemLabel "ARG")
+                  ++ (pushMemLabel "THIS")
+                  ++ (pushMemLabel "THAT")
+                  ++ [ "@SP" -- ARG=SP-n-5
+                     , "D=M"
+                     , "@5"
+                     , "D=D-A"
+                     , '@':(show i)
+                     , "D=D-A"
+                     , "@ARG"
+                     , "M=D"
+                     , "@SP" -- LCL = SP
+                     , "D=M"
+                     , "@LCL"
+                     , "M=D"
+                     , '@':f -- goto f
+                     , "0;JMP"
+                     , makeLabel retLabel], labelCount+1, function)
+    Return -> let frameReg = "13"
+                  retReg = "14"
+                  restore :: String -> Int -> [String]
+                  restore reg ind = [ '@':frameReg -- set D = *(FRAME-i)
+                                    , "D=M"
+                                    , '@':(show ind)
+                                    , "D=D-A"
+                                    , "A=D"
+                                    , "D=M"
+                                    , '@':reg -- set reg = *(FRAME-i)
+                                    , "M=D"]
+                  assembly =  [ "@LCL" -- save FRAME
+                              , "D=M"
+                              , '@':frameReg
+                              , "M=D"
+                              , "@5" -- RET = *(FRAME-5)
+                              , "A=D-A"
+                              , "D=M"
+                              , '@':retReg
+                              , "M=D"]
+                           ++ popToD
+                           ++ [ "@ARG" -- *ARG = pop()
+                              , "A=M"
+                              , "M=D"
+                              , "@ARG" -- SP = ARG+1
+                              , "D=M+1"
+                              , "@SP"
+                              , "M=D"]
+                           ++ (restore "THAT" 1)
+                           ++ (restore "THIS" 2)
+                           ++ (restore "ARG" 3)
+                           ++ (restore "LCL" 4)
+                           ++ ['@':retReg, "A=M", "0;JMP"]
+              in (assembly, labelCount, function)
+              -- if we use labelCount, we need to change header
     where makeLabel :: String -> String
           makeLabel s = '(':s ++ ")"
-          oneOp :: [String] -> ([String], Int)
-          oneOp cs = (popToD ++ cs ++ pushD, labelCount)
+          namespaceLabel :: String -> String
+          namespaceLabel l = function ++ "$" ++ l
+          oneOp :: [String] -> ([String], Int, String)
+          oneOp cs = (popToD ++ cs ++ pushD, labelCount, function)
           twoOps :: [String] -> [String]
           twoOps cs = popToD ++ popToA ++ cs ++ pushD
 
 translateLines :: String -> [Command] -> [String]
 translateLines fileName cs =
-    let f :: ([String], Int) -> Command -> ([String], Int)
-        f (prev,i) c = let (s, i') = translateLine fileName c i
-                    in (prev++s, i')
-    in fst $ Prelude.foldl f ([], 0) $ Prelude.filter (/= Comment) cs
+    let f :: ([String], Int, String) -> Command -> ([String], Int, String)
+        f (prev,i, f) c = let (s, i', f') = translateLine fileName c i f
+                    in (prev++s, i', f')
+        (answer, _, _) = Prelude.foldl f ([], 0, "") $
+                         Prelude.filter (/= Comment) cs
+    in answer
+
+translateProgram :: [FilePath] -> IO (Either String String)
+translateProgram paths = do
+    asm <- translateFiles paths
+    return $ addHeader <$> asm
